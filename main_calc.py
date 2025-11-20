@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Neonatal & Pediatric Dosing + Infusion Rate Calculator (CLI)
+Joe's Neonatal & Pediatric Dosing + Infusion Rate Calculator (CLI)
 
 - Based on your neonatal/peds protocol flow charts
 - Lets you enter a weight (kg), pick a drug, and:
@@ -8,7 +8,7 @@ Neonatal & Pediatric Dosing + Infusion Rate Calculator (CLI)
   * For infusion-type drugs (e.g. mcg/kg/min, unit/kg/hr), calculate mL/hr
 
 *** EDUCATIONAL / REFERENCE ONLY ***
-Always verify with current institutional protocols, order sets, MD/pharmacy.
+Always verify with current institutional protocols.
 """
 
 from typing import List, Dict, Optional
