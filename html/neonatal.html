@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+  /*
+  Neonatal doses from the 2025 protocol flowsheets; Joe Elliott
+*/
+<head>
+  <meta charset="UTF-8">
+  <title>Neonatal Dose Calculator (Joe's PRivate Use)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 1.5rem;
+      background: #0b1120;
+      color: #e5e7eb;
+    }
+    h1, h2 {
+      margin: 0 0 0.5rem;
+    }
+    .card {
+      background: #020617;
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      border: 1px solid #1e293b;
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.9rem;
+    }
+    input, select {
+      width: 100%;
+      padding: 0.4rem 0.55rem;
+      border-radius: 0.5rem;
+      border: 1px solid #1f2933;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 0.9rem;
+    }
+    input:focus, select:focus {
+      outline: 2px solid #22c55e;
+      outline-offset: 1px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.75rem;
+    }
+    button {
+      margin-top: 0.5rem;
+      padding: 0.45rem 0.9rem;
+      border-radius: 999px;
+      border: none;
+      background: #22c55e;
+      color: #022c22;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    button:hover {
+      filter: brightness(1.05);
+    }
+    button:active {
+      transform: translateY(1px);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+    }
+    th, td {
+      padding: 0.45rem 0.4rem;
+      border-bottom: 1px solid #1e293b;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #020617;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .protocol {
+      font-weight: 600;
+      color: #a855f7;
+    }
+    .drug-name {
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+    .note {
+      color: #9ca3af;
+    }
+    .muted {
+      color: #64748b;
+      font-size: 0.8rem;
+    }
+    .chip {
+      display: inline-block;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      font-size: 0.7rem;
+      margin-right: 0.25rem;
+      color: #cbd5f5;
+    }
+    .danger {
+      color: #f97373;
+    }
+    .scroll {
+      max-height: 60vh;
+      overflow: auto;
+      border-radius: 0.75rem;
+      border: 1px solid #1e293b;
+    }
+    @media (max-width: 640px) {
+      body { padding: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Neonatal Dose Calculator</h1>
+    <p class="muted">
+      Always cross-check doses.
+    </p>
+    <div class="row">
+      <div>
+        <label for="weightKg">Weight (kg)</label>
+        <input id="weightKg" type="number" min="0" step="0.001" value="3.2">
+      </div>
+      <div>
+        <label for="ageDays">Postnatal age (days)</label>
+        <input id="ageDays" type="number" min="0" step="1" value="1">
+      </div>
+      <div>
+        <label for="protocolFilter">Filter by protocol (optional)</label>
+        <select id="protocolFilter">
+          <option value="all">All neonatal protocols</option>
+        </select>
+      </div>
+    </div>
+    <button onclick="calculateDoses()">Calculate doses</button>
+  </div>
+
+  <div class="card">
+    <h2>Calculated Doses</h2>
+    <p id="summary" class="muted"></p>
+    <div class="scroll">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th style="width: 18%;">Protocol</th>
+            <th style="width: 20%;">Drug</th>
+            <th style="width: 35%;">Dose for this patient</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+
+const drugs = [
+  // --- Abdominal Wall Defects ---
+  {
+    protocol: "Abdominal Wall Defects",
+    id: "abd_d5hns",
+    name: "D5 ½NS",
+    route: "IV",
+    tags: ["maintenance", "ml/kg/day"],
+    calc(weightKg) {
+      const mlPerKgDay = 120; // 120 ml/kg/day
+      const total = weightKg * mlPerKgDay;
+      return `${mlPerKgDay} mL/kg/day → ${total.toFixed(1)} mL/day`;
+    },
+    note: "For gastroschisis and ruptured omphalocele to reduce risk of hyperglycemia."
+  },
+  {
+    protocol: "Abdominal Wall Defects",
+    id: "abd_d10w",
+    name: "D10W",
+    route: "IV",
+    tags: ["maintenance", "ml/kg/day"],
+    calc(weightKg) {
+      const mlPerKgDay = 80;
+      const total = weightKg * mlPerKgDay;
+      return `${mlPerKgDay} mL/kg/day → ${total.toFixed(1)} mL/day (for unruptured omphalocele).`;
+    },
+    note: "Start at 80 mL/kg/day for unruptured omphalocele."
+  },
+
+  // --- Bradycardia (Symptomatic) ---
+  {
+    protocol: "Bradycardia",
+    id: "brady_epi_ett",
+    name: "Epinephrine (ETT 0.1 mg/mL)",
+    route: "ETT",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mlPerKg = 1.0;
+      const totalMl = weightKg * mlPerKg;
+      const mgPerMl = 0.1;
+      const mg = totalMl * mgPerMl;
+      return `${mlPerKg} mL/kg → ${totalMl.toFixed(2)} mL (≈ ${mg.toFixed(2)} mg).`;
+    },
+    note: "1 mL/kg of 0.1 mg/mL (max 3 mL/kg)."
+  },
+  {
+    protocol: "Bradycardia",
+    id: "brady_epi_iv",
+    name: "Epinephrine (IV 0.02 mg/mL)",
+    route: "IV",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mlPerKg = 0.2;
+      const totalMl = weightKg * mlPerKg;
+      const mgPerMl = 0.02;
+      const mg = totalMl * mgPerMl;
+      return `${mlPerKg} mL/kg → ${totalMl.toFixed(2)} mL (≈ ${mg.toFixed(3)} mg).`;
+    },
+    note: "0.2 mL/kg of 0.02 mg/mL."
+  },
+  {
+    protocol: "Bradycardia",
+    id: "brady_atropine",
+    name: "Atropine",
+    route: "IV",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mgPerKg = 0.02;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(3)} mg.`;
+    },
+    note: "Single dose 0.02 mg/kg."
+  },
+  {
+    protocol: "Bradycardia",
+    id: "brady_ns",
+    name: "Normal Saline bolus",
+    route: "IV",
+    tags: ["bolus", "fluid"],
+    calc(weightKg) {
+      const mlPerKg = 10;
+      const total = weightKg * mlPerKg;
+      return `${mlPerKg} mL/kg → ${total.toFixed(1)} mL over 30 minutes.`;
+    },
+    note: "Volume expansion per NRP guidance."
+  },
+
+  // --- Congenital Diaphragmatic Hernia ---
+  {
+    protocol: "Congenital Diaphragmatic Hernia",
+    id: "cdh_morphine_bolus",
+    name: "Morphine bolus",
+    route: "IV/IM",
+    tags: ["bolus", "sedation"],
+    calc(weightKg) {
+      const mgPerKg = 0.05;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(3)} mg.`;
+    },
+    note: "Analgesia/sedation; avoid paralysis when possible."
+  },
+  {
+    protocol: "Congenital Diaphragmatic Hernia",
+    id: "cdh_morphine_inf",
+    name: "Morphine infusion",
+    route: "IV infusion",
+    tags: ["infusion"],
+    calc(weightKg) {
+      const mgPerKgHr = 0.05;
+      const mgHr = weightKg * mgPerKgHr;
+      return `${mgPerKgHr} mg/kg/hr → ${mgHr.toFixed(3)} mg/hr.`;
+    },
+    note: "Continuous infusion after bolus."
+  },
+
+  // --- Congenital Heart Defect (ductal-dependent) ---
+  {
+    protocol: "Congenital Heart Defect",
+    id: "chd_pge",
+    name: "Prostaglandin E1 (Alprostadil)",
+    route: "IV infusion",
+    tags: ["infusion"],
+    calc(weightKg) {
+      const low = 0.05 * weightKg;
+      const high = 0.10 * weightKg;
+      return `0.05–0.1 µg/kg/min → ${low.toFixed(3)}–${high.toFixed(3)} µg/min.`;
+    },
+    note: "Start at 0.05–0.1 mcg/kg/min; monitor for apnea and hypotension."
+  },
+
+  // --- HSV ---
+  {
+    protocol: "HSV",
+    id: "hsv_acyclovir",
+    name: "Acyclovir",
+    route: "IV",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mgPerKg = 20;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg/dose → ${mg.toFixed(1)} mg over 1 hour q8h.`;
+    },
+    note: "Used when increased risk of HSV is present."
+  },
+
+  // --- Hypoglycemia ---
+  {
+    protocol: "Hypoglycemia",
+    id: "hypo_d10_bolus",
+    name: "D10W bolus",
+    route: "IV",
+    tags: ["bolus", "glucose"],
+    calc(weightKg) {
+      const mlPerKg = 2;
+      const total = weightKg * mlPerKg;
+      return `${mlPerKg} mL/kg → ${total.toFixed(2)} mL over 5 minutes.`;
+    },
+    note: "Used when glucose < threshold per protocol."
+  },
+  {
+    protocol: "Hypoglycemia",
+    id: "hypo_mivf",
+    name: "Maintenance D10W",
+    route: "IV infusion",
+    tags: ["maintenance"],
+    calc(weightKg) {
+      const mlPerKgDay = 80;
+      const total = weightKg * mlPerKgDay;
+      return `${mlPerKgDay} mL/kg/day → ${total.toFixed(1)} mL/day (or institutional rate).`;
+    },
+    note: "Typical starting rate 80 mL/kg/day; may titrate per protocol."
+  },
+
+  // --- Hypotension / Shock ---
+  {
+    protocol: "Hypotension (Shock)",
+    id: "hypotension_ns",
+    name: "Normal Saline bolus",
+    route: "IV",
+    tags: ["bolus", "fluid"],
+    calc(weightKg) {
+      const mlPerKg = 10;
+      const total = weightKg * mlPerKg;
+      return `${mlPerKg} mL/kg → ${total.toFixed(1)} mL; may repeat ×2 if ordered.`;
+    },
+    note: "Bolus over ~30 minutes for hypovolemia."
+  },
+  {
+    protocol: "Hypotension (Shock)",
+    id: "hypotension_dopamine",
+    name: "Dopamine infusion",
+    route: "IV infusion",
+    tags: ["infusion", "pressor"],
+    calc(weightKg) {
+      const low = 5 * weightKg;
+      const high = 20 * weightKg;
+      return `5–20 µg/kg/min → ${low.toFixed(1)}–${high.toFixed(1)} µg/min.`;
+    },
+    note: "Start at 5 µg/kg/min and titrate to perfusion."
+  },
+  {
+    protocol: "Hypotension (Shock)",
+    id: "hypotension_dobutamine",
+    name: "Dobutamine infusion",
+    route: "IV infusion",
+    tags: ["infusion", "inotrope"],
+    calc(weightKg) {
+      const low = 5 * weightKg;
+      const high = 20 * weightKg;
+      return `5–20 µg/kg/min → ${low.toFixed(1)}–${high.toFixed(1)} µg/min.`;
+    },
+    note: "Consult medical control for initiation and titration."
+  },
+  {
+    protocol: "Hypotension (Shock)",
+    id: "hypotension_epi_inf",
+    name: "Epinephrine infusion",
+    route: "IV infusion",
+    tags: ["infusion", "pressor"],
+    calc(weightKg) {
+      const low = 0.02 * weightKg;
+      const high = 1.0 * weightKg;
+      return `0.02–1 µg/kg/min → ${low.toFixed(3)}–${high.toFixed(3)} µg/min.`;
+    },
+    note: "For refractory hypotension; titrate carefully."
+  },
+  {
+    protocol: "Hypotension (Shock)",
+    id: "hypotension_norepi",
+    name: "Norepinephrine infusion",
+    route: "IV infusion",
+    tags: ["infusion", "pressor"],
+    calc(weightKg) {
+      const low = 0.02 * weightKg;
+      const high = 0.5 * weightKg;
+      return `0.02–0.5 µg/kg/min → ${low.toFixed(3)}–${high.toFixed(3)} µg/min.`;
+    },
+    note: "Consider for cold shock / low SVR; dose per medical control."
+  },
+
+  // --- Maintenance Fluids (Birthweight-based) ---
+  {
+    protocol: "Maintenance Fluids",
+    id: "mivf_birthweight",
+    name: "Birthweight-based MIVF (DOL 0)",
+    route: "IV infusion",
+    tags: ["maintenance"],
+    calc(weightKg) {
+      // crude mapping based on weight categories from table
+      const g = weightKg * 1000;
+      let mlPerKgDay;
+      if (g < 750) mlPerKgDay = 100;
+      else if (g < 1000) mlPerKgDay = 90;
+      else if (g < 1500) mlPerKgDay = 80;
+      else if (g < 1800) mlPerKgDay = 80;
+      else if (g < 2500) mlPerKgDay = 70;
+      else mlPerKgDay = 60;
+      const total = weightKg * mlPerKgDay;
+      return `${mlPerKgDay} mL/kg/day (DOL 0 estimate) → ${total.toFixed(1)} mL/day.`;
+    },
+    note: "Uses birthweight categories from neonatal MIVF table for day of life 0."
+  },
+
+  // --- Persistent Pulmonary Hypertension & RDS (Curosurf etc.) ---
+  {
+    protocol: "PPHN / RDS",
+    id: "pphn_curosurf_initial",
+    name: "Curosurf initial dose",
+    route: "ETT",
+    tags: ["bolus", "surfactant"],
+    calc(weightKg) {
+      const mlPerKg = 2.5;
+      const total = weightKg * mlPerKg;
+      return `${mlPerKg} mL/kg → ${total.toFixed(2)} mL via ETT (first dose).`;
+    },
+    note: "Divide into aliquots per protocol; check local maximum vial volumes."
+  },
+  {
+    protocol: "PPHN / RDS",
+    id: "pphn_curosurf_repeat",
+    name: "Curosurf repeat dose",
+    route: "ETT",
+    tags: ["bolus", "surfactant"],
+    calc(weightKg) {
+      const mlPerKg = 1.25;
+      const total = weightKg * mlPerKg;
+      return `${mlPerKg} mL/kg → ${total.toFixed(2)} mL via ETT (repeat dose).`;
+    },
+    note: "Repeat 12 hours after first dose if indicated."
+  },
+  {
+    protocol: "PPHN / RDS",
+    id: "pphn_fentanyl_drip",
+    name: "Fentanyl infusion",
+    route: "IV infusion",
+    tags: ["infusion", "sedation"],
+    calc(weightKg) {
+      const low = 1 * weightKg;
+      const high = 4 * weightKg;
+      return `1–4 µg/kg/hr → ${low.toFixed(2)}–${high.toFixed(2)} µg/hr.`;
+    },
+    note: "Sedation for mechanically ventilated infants."
+  },
+
+  // --- Neonatal RSI ---
+  {
+    protocol: "Neonatal RSI",
+    id: "rsi_atropine",
+    name: "Atropine (pre-med)",
+    route: "IV",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mgPerKg = 0.02;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(3)} mg (no minimum dose in this protocol).`;
+    },
+    note: "Pre-intubation for bradycardia prophylaxis."
+  },
+  {
+    protocol: "Neonatal RSI",
+    id: "rsi_fentanyl",
+    name: "Fentanyl (induction)",
+    route: "IV",
+    tags: ["bolus", "sedation"],
+    calc(weightKg) {
+      const low = 1 * weightKg;
+      const high = 2 * weightKg;
+      return `1–2 µg/kg → ${low.toFixed(2)}–${high.toFixed(2)} µg IV over 3–5 minutes.`;
+    },
+    note: "Use carefully to avoid chest wall rigidity."
+  },
+  {
+    protocol: "Neonatal RSI",
+    id: "rsi_roc",
+    name: "Rocuronium",
+    route: "IV",
+    tags: ["bolus", "paralytic"],
+    calc(weightKg) {
+      const mgPerKg = 1;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(2)} mg.`;
+    },
+    note: "Avoid with suspected airway obstruction."
+  },
+  {
+    protocol: "Neonatal RSI",
+    id: "rsi_vec",
+    name: "Vecuronium (maintenance)",
+    route: "IV",
+    tags: ["bolus", "paralytic"],
+    calc(weightKg) {
+      const mgPerKg = 0.1;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(3)} mg.`;
+    },
+    note: "Maintenance paralysis if needed."
+  },
+
+  // --- Neonatal Seizure ---
+  {
+    protocol: "Seizure",
+    id: "sz_keppra",
+    name: "Levetiracetam (Keppra)",
+    route: "IV",
+    tags: ["bolus", "antiseizure"],
+    calc(weightKg) {
+      const mgPerKg = 20;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg loading → ${mg.toFixed(1)} mg over 15 minutes.`;
+    },
+    note: "Loading dose; maintenance usually per NICU guidance."
+  },
+  {
+    protocol: "Seizure",
+    id: "sz_pheno",
+    name: "Phenobarbital",
+    route: "IV",
+    tags: ["bolus", "antiseizure"],
+    calc(weightKg) {
+      const mgPerKg = 20;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg loading → ${mg.toFixed(1)} mg over 20 minutes.`;
+    },
+    note: "May require additional loading per neurology/NICU."
+  },
+  {
+    protocol: "Seizure",
+    id: "sz_midazolam",
+    name: "Midazolam",
+    route: "IV",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const low = 0.05 * weightKg;
+      const high = 0.10 * weightKg;
+      return `0.05–0.1 mg/kg → ${low.toFixed(3)}–${high.toFixed(3)} mg over 2–5 minutes.`;
+    },
+    note: "Q2–4h PRN if RASS above goal and per seizure control needs."
+  },
+  {
+    protocol: "Seizure",
+    id: "sz_lorazepam",
+    name: "Lorazepam",
+    route: "IV",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mgPerKg = 0.05;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(3)} mg; may repeat in 15 minutes.`;
+    },
+    note: "Benzodiazepine rescue dosing."
+  },
+  {
+    protocol: "Seizure",
+    id: "sz_d10_bolus",
+    name: "D10W bolus (for hypoglycemia)",
+    route: "IV",
+    tags: ["bolus", "glucose"],
+    calc(weightKg) {
+      const mlPerKg = 2;
+      const total = weightKg * mlPerKg;
+      return `${mlPerKg} mL/kg → ${total.toFixed(2)} mL.`;
+    },
+    note: "Used when glucose <50 mg/dL contributing to seizures."
+  },
+
+  // --- Sepsis (Ampicillin & Gentamicin) ---
+  {
+    protocol: "Sepsis",
+    id: "sepsis_ampicillin",
+    name: "Ampicillin",
+    route: "IV",
+    tags: ["antibiotic"],
+    calc(weightKg, ageDays) {
+      const g = weightKg * 1000;
+      let mgPerKg, interval;
+      if (g < 1000) {
+        if (ageDays < 14) { mgPerKg = 100; interval = "q12h"; }
+        else { mgPerKg = 50; interval = "q8h"; }
+      } else if (g < 2000) {
+        if (ageDays < 7) { mgPerKg = 100; interval = "q12h"; }
+        else { mgPerKg = 50; interval = "q8h"; }
+      } else {
+        if (ageDays < 7) { mgPerKg = 100; interval = "q12h"; }
+        else { mgPerKg = 50; interval = "q6h"; }
+      }
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg ${interval} → ${mg.toFixed(1)} mg per dose.`;
+    },
+    note: "Slow IV push over 3–5 minutes; dosing depends on weight & age."
+  },
+  {
+    protocol: "Sepsis",
+    id: "sepsis_gent",
+    name: "Gentamicin",
+    route: "IV",
+    tags: ["antibiotic"],
+    calc(weightKg, ageDays) {
+      const g = weightKg * 1000;
+      let mgPerKg, interval;
+      if (g < 1000) {
+        mgPerKg = 5;
+        interval = (ageDays < 14) ? "q48h" : "q24h";
+      } else if (g < 2000) {
+        mgPerKg = 5;
+        interval = (ageDays < 7) ? "q48h" : "q24h";
+      } else {
+        mgPerKg = 4;
+        interval = "q24h";
+      }
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg ${interval} → ${mg.toFixed(1)} mg per dose.`;
+    },
+    note: "Once-daily or extended-interval dosing per protocol."
+  },
+  {
+    protocol: "Sepsis",
+    id: "sepsis_acyclovir",
+    name: "Acyclovir (HSV concern)",
+    route: "IV",
+    tags: ["antiviral"],
+    calc(weightKg) {
+      const mgPerKg = 20;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(1)} mg over 1 hour q8h.`;
+    },
+    note: "Add when HSV exposure is suspected."
+  },
+
+  // --- SVT ---
+  {
+    protocol: "SVT",
+    id: "svt_adenosine_1",
+    name: "Adenosine (1st dose)",
+    route: "IV rapid push",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mgPerKg = 0.1;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(2)} mg rapid IV push followed by flush.`;
+    },
+    note: "Use most proximal IV access."
+  },
+  {
+    protocol: "SVT",
+    id: "svt_adenosine_2",
+    name: "Adenosine (2nd dose)",
+    route: "IV rapid push",
+    tags: ["bolus"],
+    calc(weightKg) {
+      const mgPerKg = 0.2;
+      const mg = weightKg * mgPerKg;
+      return `${mgPerKg} mg/kg → ${mg.toFixed(2)} mg rapid IV push if 1st dose ineffective.`;
+    },
+    note: "Maximum single dose per institutional guidance."
+  },
+  {
+    protocol: "SVT",
+    id: "svt_fentanyl_sedation",
+    name: "Fentanyl for cardioversion sedation",
+    route: "IV",
+    tags: ["sedation"],
+    calc(weightKg) {
+      const low = 1 * weightKg;
+      const high = 2 * weightKg;
+      return `1–2 µg/kg → ${low.toFixed(2)}–${high.toFixed(2)} µg IV over 5 minutes.`;
+    },
+    note: "Given prior to synchronized cardioversion when time permits."
+  }
+];
+
+// Populate protocol filter options
+(function initProtocolFilter() {
+  const select = document.getElementById("protocolFilter");
+  const uniqueProtocols = [...new Set(drugs.map(d => d.protocol))].sort();
+  uniqueProtocols.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p;
+    select.appendChild(opt);
+  });
+})();
+
+function calculateDoses() {
+  const weightInput = document.getElementById("weightKg");
+  const ageInput = document.getElementById("ageDays");
+  const protocolFilter = document.getElementById("protocolFilter").value;
+  const tbody = document.getElementById("resultsBody");
+  const summary = document.getElementById("summary");
+
+  const weightKg = parseFloat(weightInput.value);
+  const ageDays = parseInt(ageInput.value, 10) || 0;
+
+  if (isNaN(weightKg) || weightKg <= 0) {
+    alert("Please enter a valid weight in kilograms.");
+    return;
+  }
+
+  tbody.innerHTML = "";
+  let shown = 0;
+
+  drugs
+    .filter(d => protocolFilter === "all" || d.protocol === protocolFilter)
+    .forEach(drug => {
+      let doseText = "";
+      try {
+        doseText = drug.calc(weightKg, ageDays);
+      } catch (e) {
+        doseText = "Error calculating dose.";
+      }
+
+      const tr = document.createElement("tr");
+
+      const tdProtocol = document.createElement("td");
+      tdProtocol.innerHTML = `<span class="protocol">${drug.protocol}</span>`;
+      tr.appendChild(tdProtocol);
+
+      const tdDrug = document.createElement("td");
+      tdDrug.innerHTML =
+        `<div class="drug-name">${drug.name}</div>` +
+        `<div class="muted">${drug.route}</div>`;
+      tr.appendChild(tdDrug);
+
+      const tdDose = document.createElement("td");
+      tdDose.textContent = doseText;
+      tr.appendChild(tdDose);
+
+      const tdNotes = document.createElement("td");
+      const tagsHtml = drug.tags
+        .map(t => `<span class="chip">${t}</span>`)
+        .join(" ");
+      tdNotes.innerHTML = `${tagsHtml} <span class="note">${drug.note || ""}</span>`;
+      tr.appendChild(tdNotes);
+
+      tbody.appendChild(tr);
+      shown++;
+    });
+
+  summary.textContent =
+    `Weight: ${weightKg.toFixed(3)} kg · Age: ${ageDays} day(s) · ` +
+    `${shown} drug entries shown (${protocolFilter === "all" ? "all protocols" : protocolFilter}).`;
+}
+
+// run once on load
+calculateDoses();
+</script>
+</body>
+</html>
