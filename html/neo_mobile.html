@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neonatal Dose Calculator</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      color-scheme: light dark;
+    }
+    body {
+      margin: 0;
+      padding: 0.75rem;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    .app {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #020617;
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      border: 1px solid #1f2937;
+    }
+    h1 {
+      font-size: 1.25rem;
+      margin: 0 0 0.25rem 0;
+    }
+    .subtitle {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-bottom: 0.75rem;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      margin-bottom: 0.25rem;
+      color: #d1d5db;
+    }
+    input, select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.55rem 0.6rem;
+      border-radius: 0.5rem;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: #e5e7eb;
+      font-size: 0.9rem;
+    }
+    input:focus, select:focus {
+      outline: 2px solid #38bdf8;
+      outline-offset: 1px;
+      border-color: #38bdf8;
+    }
+    .row {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .row > div {
+      flex: 1;
+    }
+    .field {
+      margin-bottom: 0.75rem;
+    }
+    button {
+      width: 100%;
+      padding: 0.65rem;
+      margin-top: 0.25rem;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #22c55e, #22d3ee);
+      color: #020617;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button:active {
+      transform: translateY(1px);
+    }
+    .result {
+      margin-top: 0.9rem;
+      padding: 0.75rem;
+      border-radius: 0.75rem;
+      background: #020617;
+      border: 1px solid #1f2937;
+      font-size: 0.86rem;
+      line-height: 1.4;
+      white-space: pre-line;
+    }
+    .result-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: #f97316;
+    }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-bottom: 0.35rem;
+    }
+    .pill {
+      font-size: 0.65rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      color: #9ca3af;
+    }
+    .warning {
+      margin-top: 0.75rem;
+      font-size: 0.7rem;
+      color: #f87171;
+    }
+    .hint {
+      font-size: 0.75rem;
+      color: #9ca3af;
+      margin-top: 0.35rem;
+    }
+    .section-title {
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin: 0.4rem 0 0.2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <h1>Neonatal Dose Calculator</h1>
+      <div class="subtitle">
+        Based on your neonatal transport protocol (internal use only). Enter weight, choose a medication, and calculate a one-time dose or rate.
+      </div>
+
+      <div class="field">
+        <div class="section-title">Step 1 · Weight</div>
+        <div class="row">
+          <div>
+            <label for="weightKg">Weight (kg)</label>
+            <input id="weightKg" type="number" step="0.01" inputmode="decimal" placeholder="e.g. 3.2" />
+          </div>
+          <div>
+            <label for="weightG">or Weight (grams)</label>
+            <input id="weightG" type="number" step="1" inputmode="numeric" placeholder="e.g. 3200" />
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="section-title">Step 2 · Medication</div>
+        <label for="medSelect">Neonatal medication / fluid</label>
+        <select id="medSelect"></select>
+        <div class="hint" id="medHint"></div>
+      </div>
+
+      <div class="field" id="rateField" style="display:none;">
+        <div class="section-title">Step 3 · Infusion Rate</div>
+        <label for="rateInput" id="rateLabel">Desired rate</label>
+        <input id="rateInput" type="number" step="0.01" inputmode="decimal" placeholder="" />
+        <div class="hint" id="rateHint"></div>
+      </div>
+
+      <button id="calcBtn">Calculate Dose</button>
+
+      <div class="result" id="result" style="display:none;"></div>
+
+      <div class="warning">
+        This calculator simply automates mg/kg or mL/kg arithmetic from your written protocol.
+        It does <strong>not</strong> replace clinical judgment, institutional policy, or pharmacist verification.
+        Always cross-check doses against the official protocol and with medical control / pharmacy before administration.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Core medication definitions (strictly from the neonatal portions of your protocol)
+    const MEDS = [
+      // Fluids & glucose
+      {
+        id: "d10_bolus_2",
+        name: "D10W bolus (hypoglycemia) – 2 mL/kg",
+        category: "Fluids / Glucose",
+        type: "ml_per_kg",
+        value: 2,
+        extra: { context: "Neonatal hypoglycemia bolus" },
+        hint: "Outputs total mL for a one-time IV bolus at 2 mL/kg."
+      },
+      {
+        id: "d10_80_per_day",
+        name: "D10W maintenance – 80 mL/kg/day",
+        category: "Fluids / Glucose",
+        type: "ml_per_kg_day",
+        value: 80,
+        extra: { context: "Neonatal maintenance fluid (e.g., hypoglycemia, abdominal wall defects)" },
+        hint: "Outputs 24-hr total volume and mL/hr for 80 mL/kg/day."
+      },
+      {
+        id: "d5half_120_per_day",
+        name: "D5 ½NS – 120 mL/kg/day",
+        category: "Fluids / Glucose",
+        type: "ml_per_kg_day",
+        value: 120,
+        extra: { context: "Abdominal wall defects / ruptured omphalocele" },
+        hint: "Outputs 24-hr total volume and mL/hr for 120 mL/kg/day."
+      },
+      {
+        id: "ns_bolus_10",
+        name: "Normal Saline bolus – 10 mL/kg",
+        category: "Fluids / Glucose",
+        type: "ml_per_kg",
+        value: 10,
+        extra: { context: "Neonatal shock / hypotension / bradycardia" },
+        hint: "Outputs total mL for a one-time IV bolus at 10 mL/kg."
+      },
+
+      // Resuscitation drugs
+      {
+        id: "epi_ett",
+        name: "Epinephrine ETT 0.1 mg/mL – 1 mL/kg",
+        category: "Resuscitation",
+        type: "ml_per_kg_with_conc",
+        value: 1,        // mL/kg
+        concentration: 0.1, // mg per mL
+        extra: { context: "Symptomatic neonatal bradycardia; ETT route" },
+        hint: "Outputs mL and mg for a one-time ETT dose at 1 mL/kg of 0.1 mg/mL."
+      },
+      {
+        id: "epi_iv",
+        name: "Epinephrine IV 0.02 mg/mL – 0.2 mL/kg",
+        category: "Resuscitation",
+        type: "ml_per_kg_with_conc",
+        value: 0.2,
+        concentration: 0.02,
+        extra: { context: "Symptomatic neonatal bradycardia; IV route" },
+        hint: "Outputs mL and mg for a one-time IV dose at 0.2 mL/kg of 0.02 mg/mL."
+      },
+      {
+        id: "atropine_0_02",
+        name: "Atropine – 0.02 mg/kg",
+        category: "Resuscitation / RSI",
+        type: "mg_per_kg",
+        value: 0.02,
+        extra: { context: "Neonatal bradycardia / premedication for RSI" },
+        hint: "Outputs mg for a one-time dose at 0.02 mg/kg."
+      },
+
+      // Sedation / analgesia / paralytics
+      {
+        id: "morphine_bolus_0_05",
+        name: "Morphine bolus – 0.05 mg/kg",
+        category: "Sedation / Analgesia",
+        type: "mg_per_kg",
+        value: 0.05,
+        extra: { context: "CDH / ventilated neonates" },
+        hint: "Outputs mg for a one-time morphine bolus at 0.05 mg/kg."
+      },
+      {
+        id: "morphine_infusion_0_05_hr",
+        name: "Morphine infusion – 0.05 mg/kg/hr",
+        category: "Sedation / Analgesia",
+        type: "mg_per_kg_hr",
+        value: 0.05,
+        extra: { context: "Continuous infusion after initial morphine bolus" },
+        hint: "Outputs mg/hr for a continuous morphine infusion at 0.05 mg/kg/hr."
+      },
+      {
+        id: "fentanyl_bolus_1_2",
+        name: "Fentanyl bolus – 1–2 mcg/kg",
+        category: "Sedation / Analgesia / RSI",
+        type: "range_mcg_per_kg",
+        value: { min: 1, max: 2 },
+        extra: { context: "RSI, PPHN sedation, cardioversion sedation" },
+        hint: "Outputs mcg for both 1 mcg/kg and 2 mcg/kg bolus doses."
+      },
+      {
+        id: "fentanyl_inf_1_4_hr",
+        name: "Fentanyl infusion – 1–4 mcg/kg/hr",
+        category: "Sedation / Analgesia",
+        type: "range_mcg_per_kg_hr",
+        value: { min: 1, max: 4 },
+        extra: { context: "Sedation for mechanically ventilated infants (e.g., PPHN)" },
+        hint: "Outputs mcg/hr for 1 mcg/kg/hr and 4 mcg/kg/hr infusion endpoints."
+      },
+      {
+        id: "rocuronium_1",
+        name: "Rocuronium – 1 mg/kg (RSI)",
+        category: "RSI / Paralytic",
+        type: "mg_per_kg",
+        value: 1,
+        extra: { context: "Neonatal RSI neuromuscular blockade" },
+        hint: "Outputs mg for a one-time RSI dose at 1 mg/kg."
+      },
+      {
+        id: "vecuronium_0_1",
+        name: "Vecuronium – 0.1 mg/kg (maintenance)",
+        category: "RSI / Paralytic",
+        type: "mg_per_kg",
+        value: 0.1,
+        extra: { context: "Post-intubation paralysis if required" },
+        hint: "Outputs mg for a one-time maintenance dose at 0.1 mg/kg."
+      },
+
+      // Antimicrobials
+      {
+        id: "ampicillin_100",
+        name: "Ampicillin – 100 mg/kg",
+        category: "Antimicrobial",
+        type: "mg_per_kg",
+        value: 100,
+        extra: { context: "Neonatal sepsis higher dose line (interval per protocol)" },
+        hint: "Outputs mg for a dose at 100 mg/kg (check protocol for interval based on weight & age)."
+      },
+      {
+        id: "ampicillin_50",
+        name: "Ampicillin – 50 mg/kg",
+        category: "Antimicrobial",
+        type: "mg_per_kg",
+        value: 50,
+        extra: { context: "Neonatal sepsis lower dose line (interval per protocol)" },
+        hint: "Outputs mg for a dose at 50 mg/kg (check protocol for interval based on weight & age)."
+      },
+      {
+        id: "gentamicin_5",
+        name: "Gentamicin – 5 mg/kg",
+        category: "Antimicrobial",
+        type: "mg_per_kg",
+        value: 5,
+        extra: { context: "Neonatal sepsis dosing for some weight/age combinations" },
+        hint: "Outputs mg for a dose at 5 mg/kg (see protocol for q24–48h interval)."
+      },
+      {
+        id: "gentamicin_4",
+        name: "Gentamicin – 4 mg/kg",
+        category: "Antimicrobial",
+        type: "mg_per_kg",
+        value: 4,
+        extra: { context: "Neonatal sepsis dosing for infants >2 kg" },
+        hint: "Outputs mg for a dose at 4 mg/kg (see protocol for q24h interval)."
+      },
+      {
+        id: "acyclovir_20",
+        name: "Acyclovir – 20 mg/kg",
+        category: "Antimicrobial",
+        type: "mg_per_kg",
+        value: 20,
+        extra: { context: "Neonatal HSV / sepsis with HSV concern" },
+        hint: "Outputs mg for a dose at 20 mg/kg (q8h per protocol)."
+      },
+
+      // Surfactant
+      {
+        id: "curosurf_2_5",
+        name: "Curosurf – 2.5 mL/kg (initial)",
+        category: "Respiratory / Surfactant",
+        type: "ml_per_kg",
+        value: 2.5,
+        extra: { context: "RDS / PPHN; initial surfactant dose via ETT" },
+        hint: "Outputs mL for an initial 2.5 mL/kg dose (divide per protocol for aliquots)."
+      },
+      {
+        id: "curosurf_1_25",
+        name: "Curosurf – 1.25 mL/kg (repeat)",
+        category: "Respiratory / Surfactant",
+        type: "ml_per_kg",
+        value: 1.25,
+        extra: { context: "Repeat surfactant dose, 12 hours after first dose when indicated" },
+        hint: "Outputs mL for a repeat 1.25 mL/kg dose."
+      },
+
+      // Anticonvulsants
+      {
+        id: "keppra_20",
+        name: "Levetiracetam (Keppra) – 20 mg/kg",
+        category: "Anticonvulsant",
+        type: "mg_per_kg",
+        value: 20,
+        extra: { context: "Neonatal seizure loading dose" },
+        hint: "Outputs mg for a loading dose at 20 mg/kg."
+      },
+      {
+        id: "phenobarb_20",
+        name: "Phenobarbital – 20 mg/kg",
+        category: "Anticonvulsant",
+        type: "mg_per_kg",
+        value: 20,
+        extra: { context: "Neonatal seizure loading dose" },
+        hint: "Outputs mg for a loading dose at 20 mg/kg."
+      },
+      {
+        id: "midazolam_0_05_0_1",
+        name: "Midazolam – 0.05–0.1 mg/kg",
+        category: "Anticonvulsant / Sedation",
+        type: "range_mg_per_kg",
+        value: { min: 0.05, max: 0.1 },
+        extra: { context: "Neonatal seizures / sedation (intermittent IV)" },
+        hint: "Outputs mg for both 0.05 mg/kg and 0.1 mg/kg doses."
+      },
+      {
+        id: "lorazepam_0_05",
+        name: "Lorazepam – 0.05 mg/kg",
+        category: "Anticonvulsant / Sedation",
+        type: "mg_per_kg",
+        value: 0.05,
+        extra: { context: "Neonatal seizure benzodiazepine option" },
+        hint: "Outputs mg for a dose at 0.05 mg/kg."
+      },
+
+      // Cardiovascular / pressors / SVT
+      {
+        id: "dopamine_5_20",
+        name: "Dopamine infusion – 5–20 mcg/kg/min",
+        category: "Pressor",
+        type: "range_mcg_per_kg_min",
+        value: { min: 5, max: 20 },
+        extra: { context: "Neonatal hypotension / shock" },
+        hint: "Enter a specific mcg/kg/min within 5–20 if you want a single-point calculation, or use the endpoints shown."
+      },
+      {
+        id: "epi_infusion_0_02_1",
+        name: "Epinephrine infusion – 0.02–1 mcg/kg/min",
+        category: "Pressor",
+        type: "range_mcg_per_kg_min",
+        value: { min: 0.02, max: 1 },
+        extra: { context: "Neonatal hypotension / shock" },
+        hint: "Use primarily as a check on arithmetic; see protocol & pharmacy for mixture details."
+      },
+      {
+        id: "dobutamine_5_20",
+        name: "Dobutamine infusion – 5–20 mcg/kg/min",
+        category: "Pressor",
+        type: "range_mcg_per_kg_min",
+        value: { min: 5, max: 20 },
+        extra: { context: "Neonatal hypotension / shock" },
+        hint: "Outputs mcg/min and mcg/hr for low and high endpoints."
+      },
+      {
+        id: "norepi_0_02_0_5",
+        name: "Norepinephrine infusion – 0.02–0.5 mcg/kg/min",
+        category: "Pressor",
+        type: "range_mcg_per_kg_min",
+        value: { min: 0.02, max: 0.5 },
+        extra: { context: "Neonatal hypotension / shock (per medical control)" },
+        hint: "Outputs mcg/min and mcg/hr for low and high endpoints."
+      },
+      {
+        id: "adenosine_0_1_0_2",
+        name: "Adenosine – 0.1 mg/kg then 0.2 mg/kg",
+        category: "SVT / Antiarrhythmic",
+        type: "two_step_mg_per_kg",
+        value: { first: 0.1, second: 0.2 },
+        extra: { context: "Neonatal SVT – first and second dose scheme" },
+        hint: "Outputs mg for first (0.1 mg/kg) and second (0.2 mg/kg) doses."
+      }
+    ];
+
+    function groupMedsByCategory(meds) {
+      const grouped = {};
+      meds.forEach(m => {
+        if (!grouped[m.category]) grouped[m.category] = [];
+        grouped[m.category].push(m);
+      });
+      return grouped;
+    }
+
+    function buildMedSelect() {
+      const sel = document.getElementById("medSelect");
+      sel.innerHTML = "";
+      const grouped = groupMedsByCategory(MEDS);
+      const categories = Object.keys(grouped).sort();
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select a medication…";
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      sel.appendChild(placeholder);
+
+      categories.forEach(cat => {
+        const optgroup = document.createElement("optgroup");
+        optgroup.label = cat;
+        grouped[cat].forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m.id;
+          opt.textContent = m.name;
+          optgroup.appendChild(opt);
+        });
+        sel.appendChild(optgroup);
+      });
+    }
+
+    function getSelectedMed() {
+      const id = document.getElementById("medSelect").value;
+      return MEDS.find(m => m.id === id) || null;
+    }
+
+    function formatNumber(num, decimals = 2) {
+      return Number(num).toFixed(decimals).replace(/\.00$/, "");
+    }
+
+    function showMedHint(med) {
+      const hintEl = document.getElementById("medHint");
+      const rateField = document.getElementById("rateField");
+      const rateHint = document.getElementById("rateHint");
+      const rateLabel = document.getElementById("rateLabel");
+      rateField.style.display = "none";
+      rateHint.textContent = "";
+      rateLabel.textContent = "Desired rate";
+
+      if (!med) {
+        hintEl.textContent = "";
+        return;
+      }
+      hintEl.textContent = med.hint || "";
+
+      if (med.type === "range_mcg_per_kg_min") {
+        rateField.style.display = "block";
+        const min = med.value.min;
+        const max = med.value.max;
+        rateLabel.textContent = `Optional: specific rate (mcg/kg/min, ${min}–${max})`;
+        rateHint.textContent = "If left blank, calculator shows low and high endpoints for the protocol range.";
+        document.getElementById("rateInput").placeholder = `${min}–${max}`;
+      } else {
+        document.getElementById("rateInput").value = "";
+        rateField.style.display = "none";
+      }
+    }
+
+    function calculate() {
+      const resEl = document.getElementById("result");
+      const weightKgInput = document.getElementById("weightKg").value.trim();
+      const weightGInput = document.getElementById("weightG").value.trim();
+
+      let weightKg = null;
+      if (weightKgInput) {
+        weightKg = parseFloat(weightKgInput);
+      } else if (weightGInput) {
+        const grams = parseFloat(weightGInput);
+        if (!isNaN(grams)) weightKg = grams / 1000;
+      }
+
+      const med = getSelectedMed();
+
+      if (!weightKg || !med || isNaN(weightKg) || weightKg <= 0) {
+        resEl.style.display = "block";
+        resEl.innerHTML = "Please enter a valid weight and select a medication.";
+        return;
+      }
+
+      let text = "";
+      const w = weightKg;
+      const weightLine = `Weight: ${formatNumber(w, 3)} kg`;
+
+      switch (med.type) {
+        case "ml_per_kg": {
+          const totalMl = w * med.value;
+          text += `${weightLine}\n`;
+          text += `Dose: ${formatNumber(med.value)} mL/kg\n`;
+          text += `Calculated volume: ${formatNumber(totalMl, 2)} mL`;
+          break;
+        }
+        case "ml_per_kg_with_conc": {
+          const volPerKg = med.value;
+          const mgPerMl = med.concentration;
+          const totalMl = w * volPerKg;
+          const totalMg = totalMl * mgPerMl;
+          text += `${weightLine}\n`;
+          text += `Volume: ${formatNumber(volPerKg)} mL/kg (concentration ${mgPerMl} mg/mL)\n`;
+          text += `Total volume: ${formatNumber(totalMl, 2)} mL\n`;
+          text += `Total drug: ${formatNumber(totalMg, 3)} mg`;
+          break;
+        }
+        case "ml_per_kg_day": {
+          const totalMlDay = w * med.value;
+          const mlPerHour = totalMlDay / 24;
+          text += `${weightLine}\n`;
+          text += `Rate: ${formatNumber(med.value)} mL/kg/day\n`;
+          text += `24-hour total: ${formatNumber(totalMlDay, 1)} mL/day\n`;
+          text += `Hourly rate: ${formatNumber(mlPerHour, 2)} mL/hr`;
+          break;
+        }
+        case "mg_per_kg": {
+          const totalMg = w * med.value;
+          text += `${weightLine}\n`;
+          text += `Dose: ${formatNumber(med.value, 3)} mg/kg\n`;
+          text += `Calculated dose: ${formatNumber(totalMg, 3)} mg`;
+          break;
+        }
+        case "mg_per_kg_hr": {
+          const mgPerHr = w * med.value;
+          text += `${weightLine}\n`;
+          text += `Infusion rate: ${formatNumber(med.value, 3)} mg/kg/hr\n`;
+          text += `Calculated infusion: ${formatNumber(mgPerHr, 3)} mg/hr`;
+          break;
+        }
+        case "range_mcg_per_kg": {
+          const low = med.value.min;
+          const high = med.value.max;
+          const totalLow = w * low;
+          const totalHigh = w * high;
+          text += `${weightLine}\n`;
+          text += `Dose range: ${formatNumber(low, 3)}–${formatNumber(high, 3)} mcg/kg\n`;
+          text += `Calculated range:\n`;
+          text += `  • Low:  ${formatNumber(totalLow, 3)} mcg\n`;
+          text += `  • High: ${formatNumber(totalHigh, 3)} mcg`;
+          break;
+        }
+        case "range_mcg_per_kg_hr": {
+          const low = med.value.min;
+          const high = med.value.max;
+          const lowHr = w * low;
+          const highHr = w * high;
+          text += `${weightLine}\n`;
+          text += `Infusion range: ${formatNumber(low, 3)}–${formatNumber(high, 3)} mcg/kg/hr\n`;
+          text += `Calculated infusion endpoints:\n`;
+          text += `  • Low:  ${formatNumber(lowHr, 3)} mcg/hr\n`;
+          text += `  • High: ${formatNumber(highHr, 3)} mcg/hr`;
+          break;
+        }
+        case "range_mg_per_kg": {
+          const low = med.value.min;
+          const high = med.value.max;
+          const totalLow = w * low;
+          const totalHigh = w * high;
+          text += `${weightLine}\n`;
+          text += `Dose range: ${formatNumber(low, 3)}–${formatNumber(high, 3)} mg/kg\n`;
+          text += `Calculated range:\n`;
+          text += `  • Low:  ${formatNumber(totalLow, 3)} mg\n`;
+          text += `  • High: ${formatNumber(totalHigh, 3)} mg`;
+          break;
+        }
+        case "range_mcg_per_kg_min": {
+          const low = med.value.min;
+          const high = med.value.max;
+          const rateInput = document.getElementById("rateInput").value.trim();
+          const hasSpecificRate = rateInput !== "";
+          const specificRate = hasSpecificRate ? parseFloat(rateInput) : null;
+
+          text += `${weightLine}\n`;
+          text += `Protocol range: ${formatNumber(low, 3)}–${formatNumber(high, 3)} mcg/kg/min\n`;
+
+          if (hasSpecificRate && !isNaN(specificRate) && specificRate > 0) {
+            const mcgMin = w * specificRate;
+            const mcgHr = mcgMin * 60;
+            const mgHr = mcgHr / 1000;
+            text += `\nFor rate ${formatNumber(specificRate, 3)} mcg/kg/min:\n`;
+            text += `  • ${formatNumber(mcgMin, 3)} mcg/min\n`;
+            text += `  • ${formatNumber(mcgHr, 3)} mcg/hr (${formatNumber(mgHr, 4)} mg/hr)`;
+            text += `\n\nEndpoints for full range:\n`;
+          }
+
+          const mcgMinLow = w * low;
+          const mcgMinHigh = w * high;
+          const mcgHrLow = mcgMinLow * 60;
+          const mcgHrHigh = mcgMinHigh * 60;
+          const mgHrLow = mcgHrLow / 1000;
+          const mgHrHigh = mcgHrHigh / 1000;
+
+          text += `  • Low (${formatNumber(low, 3)} mcg/kg/min): ${formatNumber(mcgMinLow, 3)} mcg/min, ${formatNumber(mcgHrLow, 3)} mcg/hr (${formatNumber(mgHrLow, 4)} mg/hr)\n`;
+          text += `  • High (${formatNumber(high, 3)} mcg/kg/min): ${formatNumber(mcgMinHigh, 3)} mcg/min, ${formatNumber(mcgHrHigh, 3)} mcg/hr (${formatNumber(mgHrHigh, 4)} mg/hr)`;
+          break;
+        }
+        case "two_step_mg_per_kg": {
+          const first = med.value.first;
+          const second = med.value.second;
+          const dose1 = w * first;
+          const dose2 = w * second;
+          text += `${weightLine}\n`;
+          text += `First dose:  ${formatNumber(first, 3)} mg/kg → ${formatNumber(dose1, 3)} mg\n`;
+          text += `Second dose: ${formatNumber(second, 3)} mg/kg → ${formatNumber(dose2, 3)} mg`;
+          break;
+        }
+        default: {
+          text += "Unsupported medication type in calculator.";
+        }
+      }
+
+      if (med.extra && med.extra.context) {
+        text = med.name + "\n" + text;
+        text += `\n\nContext: ${med.extra.context}`;
+      } else {
+        text = med.name + "\n" + text;
+      }
+
+      resEl.style.display = "block";
+      resEl.textContent = text;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      buildMedSelect();
+      document.getElementById("medSelect").addEventListener("change", () => {
+        const med = getSelectedMed();
+        showMedHint(med);
+      });
+      document.getElementById("calcBtn").addEventListener("click", (e) => {
+        e.preventDefault();
+        calculate();
+      });
+    });
+  </script>
+</body>
+</html>
